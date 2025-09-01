@@ -16,10 +16,10 @@ const PremiumNavbar = () => {
     }
     // console.log(localStorage.getItem('admin'))
     const currentUser = auth.currentUser;
-    if (currentUser) {
-        console.log(currentUser.email)
-        console.log(currentUser.displayName)
-    }
+    // if (currentUser) {
+    //     console.log(currentUser.email)
+    //     console.log(currentUser.displayName)
+    // }
     // Close dropdowns when clicking outside
     useEffect(() => {
         const handleClick = (e) => {
@@ -249,7 +249,7 @@ const PremiumNavbar = () => {
                                 <div className="relative">
                                     <div className="h-9 w-9 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 overflow-hidden avatar-ring">
                                         <img
-                                            src="https://randomuser.me/api/portraits/men/32.jpg"
+                                            src={currentUser.photoURL}
                                             alt="User"
                                             className="h-full w-full object-cover"
                                         />
@@ -274,7 +274,7 @@ const PremiumNavbar = () => {
                                     <div className="flex items-center">
                                         <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 overflow-hidden mr-3">
                                             <img
-                                                src="https://randomuser.me/api/portraits/men/32.jpg"
+                                                src={currentUser.photoURL}
                                                 alt="User"
                                                 className="h-full w-full object-cover"
                                             />

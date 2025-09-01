@@ -1,7 +1,25 @@
-import { collection, onSnapshot, query, QuerySnapshot } from "firebase/firestore";
+import { addDoc, collection, doc, getDoc, onSnapshot, query, QuerySnapshot, serverTimestamp, where } from "firebase/firestore";
 import React, { useState, useEffect } from "react";
-import { fireDB } from "../../../firebase/FirebaseConfig";
+import { auth, fireDB } from "../../../firebase/FirebaseConfig";
+import { avatar } from "@material-tailwind/react";
+import toast from "react-hot-toast";
 
+
+const users = [
+    {
+        id: 1,
+        name: "Luy Robin",
+        avatar: "/avatar1.png",
+        online: false,
+    },
+    {
+        id: 2,
+        name: "Mân",
+        avatar: "/avatar2.png",
+        online: true,
+    },
+    // Thêm user khác nếu cần
+];
 // Dummy data for chats and messages
 // const chats = [
 //     {
@@ -196,25 +214,102 @@ export default function ChatPage() {
     const [isMobile, setIsMobile] = useState(window.innerWidth < 640);
     const [chats, setChats] = useState([]);
     const [messages, setMessages] = useState([])
-
+    const [modalOpen, setModalOpen] = useState(false);
+    const [selected, setSelected] = useState([]);
+    const [user, setUsers] = useState([]);
+    const [nameChat, setNameChat] = useState('');
+    const [avtSelected, setAvtSelected] = useState("");
+    const currentUser = auth.currentUser;
     useEffect(() => {
         const handleResize = () => setIsMobile(window.innerWidth < 640);
         window.addEventListener("resize", handleResize);
         return () => window.removeEventListener("resize", handleResize);
     }, []);
 
+    const toggleUser = (id, photoUrl) => {
+        let newSelected;
+        if (selected.includes(id)) {
+            newSelected = selected.filter((uid) => uid !== id);
+        } else {
+            newSelected = [...selected, id];
+        }
+        setSelected(newSelected);
+        if (newSelected.length === 1) {
+            setAvtSelected(photoUrl);
+        } else {
+            setAvtSelected("https://th.bing.com/th/id/R.7cc4e920df01c81a1109ee19734250e2?rik=jWJ1a62euL3hjw&pid=ImgRaw&r=0")
+        }
+    };
 
-    function getAllChat() {
+    const handleCreateChat = async () => {
+        const id = "single-toast";
+        const currentUid = auth.currentUser?.uid;
+        const members = currentUid
+            ? Array.from(new Set([currentUid, ...selected]))
+            : selected;
+        if (!nameChat) {
+            toast.error("Chưa nhập tên đoạn chat");
+            return;
+        }
+        if (selected.length < 1) {
+            toast.error("Chưa nhập tên đoạn chat");
+            return;
+        }
+        try {
+            const newChat = collection(fireDB, "chats");
+            await addDoc(newChat, {
+                members,
+                message: "",
+                updatedAt: serverTimestamp(),
+                type: selected.length > 1 ? "group" : "direct",
+                name: nameChat,
+                avatar: avtSelected
+            })
+            setNameChat('')
+            setSelected([]);
+            setModalOpen(false);
+        }
+        catch (error) {
+            console.log(error)
+        }
+    };
+
+    const getAllChat = async () => {
         try {
             const q = query(
-                collection(fireDB, "chats")
+                collection(fireDB, "chats"),
+                where("members", "array-contains", currentUser.uid)
             );
-            const data = onSnapshot(q, (QuerySnapshot) => {
+            const data = onSnapshot(q, async (QuerySnapshot) => {
                 let chatArray = [];
-                QuerySnapshot.forEach((doc) => {
-                    console.log(doc.data())
-                    chatArray.push({ ...doc.data(), id: doc.id })
-                });
+                for (const docSnap of QuerySnapshot.docs) {
+                    const chatData = docSnap.data();
+                    const chatId = docSnap.id;
+                    if (chatData.type === "direct") {
+                        const friendId = chatData.members.find((id) => id !== currentUser.uid);
+                        const friendRef = doc(fireDB, "users", friendId);
+                        const friendSnap = await getDoc(friendRef);
+                        const friendData = friendSnap.exists() ? friendSnap.data() : {};
+
+                        chatArray.push({
+                            id: chatId,
+                            type: "direct",
+                            name: friendData.name,
+                            avatar: friendData.avatar,
+                            lastMessage: chatData.message,
+                            updatedAt: chatData.updatedAt,
+                        });
+                    } else {
+                        chatArray.push({
+                            id: chatId,
+                            type: "group",
+                            name: chatData.name,
+                            avatar: chatData.avatar,
+                            lastMessage: chatData.message,
+                            updatedAt: chatData.updatedAt,
+                        });
+                    }
+                }
                 setChats(chatArray);
             });
             return () => data;
@@ -224,8 +319,32 @@ export default function ChatPage() {
         }
     }
 
+
+    function getAllUsers() {
+        try {
+            const q = query(
+                collection(fireDB, "users"),
+                where("uid", "!=", currentUser.uid)
+            );
+            const data = onSnapshot(q, (QuerySnapshot) => {
+                let userArray = [];
+                QuerySnapshot.forEach((doc) => {
+                    // console.log(doc),
+                    userArray.push({ ...doc.data(), id: doc.id })
+                })
+                console.log(userArray)
+                setUsers(userArray);
+            })
+            return () => data;
+        }
+        catch (error) {
+            console.log(error)
+        }
+    }
+
     const handleSelectedChat = (chat) => {
         setSelectedChat(chat);
+        console.log(chat.id)
         try {
             const q = query(
                 collection(fireDB, "chats", chat.id, "messages")
@@ -233,7 +352,7 @@ export default function ChatPage() {
             const data = onSnapshot(q, (QuerySnapshot) => {
                 let messageArray = [];
                 QuerySnapshot.forEach((doc) => {
-                    // console.log(doc.data())
+                    console.log(doc.data())
                     messageArray.push({ ...doc.data(), id: doc.id })
                 });
                 setMessages(messageArray)
@@ -248,6 +367,8 @@ export default function ChatPage() {
 
     useEffect(() => {
         getAllChat();
+        getAllUsers();
+        console.log(avtSelected)
         // const unsub = onSnapshot(collection(fireDB, "chats"), (snapshot) => {
         //     setChats(snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data })));
         // });
@@ -266,10 +387,12 @@ export default function ChatPage() {
             <div className="flex-1 flex flex-col h-screen sm:max-w-full sm:mx-auto sm:w-full sm:flex-row sm:bg-white sm:rounded-xl sm:shadow-lg sm:overflow-hidden">
                 {/* Chat Sidebar */}
                 {(isMobile ? selectedChat === null : true) && (
-                    <aside className="w-full sm:w-1/3 border-b sm:border-b-0 sm:border-r bg-gray-50 p-3 sm:p-6 flex flex-col">
+                    <aside className="w-full h-screen sm:w-1/3 border-b sm:border-b-0 sm:border-r bg-gray-50 p-3 sm:p-6 flex flex-col">
                         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6">
                             <h2 className="text-2xl font-semibold text-gray-800 mb-3 sm:mb-0">Chats</h2>
-                            <button className="bg-blue-500 hover:bg-blue-600 text-white rounded-lg px-4 py-2 font-semibold shadow">
+                            <button className="bg-blue-500 hover:bg-blue-600 text-white rounded-lg px-4 py-2 font-semibold shadow"
+                                onClick={() => setModalOpen(true)}
+                            >
                                 + Create New Chat
                             </button>
                         </div>
@@ -418,6 +541,69 @@ export default function ChatPage() {
                             <button className="bg-blue-500 p-2 rounded-full text-white"><svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2"><path d="M2 12l16-6-7 7-1 4z" /></svg></button>
                         </div>
                     </main>
+                )}
+
+                {/* Modal chọn user tạo chat mới */}
+                {modalOpen && (
+                    <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
+                        <div className="bg-white p-8 rounded-lg w-[350px] shadow-xl">
+                            <h3 className="font-bold text-lg mb-4 text-gray-800">Select users to start a new chat</h3>
+                            <div className="flex flex-row items-center space-x-4 mt-4 mb-4">
+                                <input
+                                    onChange={(e) => setNameChat(e.target.value)}
+                                    className="w-full px-8 py-4 rounded-lg font-medium bg-gray-100 border border-gray-200 placeholder-gray-500 text-sm focus:outline-none focus:border-gray-400 focus:bg-white"
+                                    type="text"
+                                    placeholder="Tên đoạn chat"
+
+                                />
+                            </div>
+                            <div className="flex flex-col gap-3 mb-6">
+                                {user.map((user) => (
+                                    <label
+                                        key={user.id}
+                                        className="flex items-center gap-3 cursor-pointer"
+                                    >
+                                        <input
+                                            type="checkbox"
+                                            checked={selected.includes(user.id)}
+                                            onChange={() => {
+                                                toggleUser(user.id, user.avatar);
+                                            }}
+                                            className="accent-blue-600"
+                                        />
+                                        <img
+                                            src={user.avatar}
+                                            alt={user.name}
+                                            className="w-8 h-8 rounded-full object-cover"
+                                        />
+                                        <span className="font-medium text-gray-700">{user.name}</span>
+                                        {user.online && (
+                                            <span className="text-xs text-green-600">online</span>
+                                        )}
+                                    </label>
+                                ))}
+                            </div>
+                            <div className="flex gap-2 justify-end">
+                                <button
+                                    onClick={() => {
+                                        setSelected([]);
+
+                                        setModalOpen(false);
+                                    }}
+                                    className="px-4 py-2 rounded bg-gray-100 text-gray-600 font-medium hover:bg-gray-200"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={handleCreateChat}
+                                    className="px-4 py-2 rounded bg-blue-600 text-white font-medium hover:bg-blue-700"
+                                    disabled={selected.length === 0}
+                                >
+                                    Create Chat
+                                </button>
+                            </div>
+                        </div>
+                    </div>
                 )}
             </div>
         </div>

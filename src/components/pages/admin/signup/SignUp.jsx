@@ -12,7 +12,8 @@ import myContext from "../../../../context/myContext";
 import { useNavigate } from "react-router-dom"; // đúng package
 import toast from "react-hot-toast";
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword, updateProfile } from "firebase/auth";
-import { auth } from "../../../../firebase/FirebaseConfig.jsx";
+import { auth, fireDB } from "../../../../firebase/FirebaseConfig.jsx";
+import { doc, serverTimestamp, setDoc } from "firebase/firestore";
 
 export default function SignUp() {
     const context = useContext(myContext);
@@ -23,7 +24,7 @@ export default function SignUp() {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [name, setName] = useState('')
-
+    const [avatar, setAvatar] = useState();
 
     // Dummy login function, replace with your logic
     const handleCreateUser = async () => {
@@ -35,16 +36,53 @@ export default function SignUp() {
             return;
         }
         try {
-            const userCreadential = await createUserWithEmailAndPassword(auth, email, password);
+            const formData = new FormData();
+            formData.append("file", avatar);
+            formData.append("upload_preset", "manddok");
+            formData.append("cloud_name", "dmghtw364");
 
-            await updateProfile(userCreadential.user, {
+            // Upload ảnh
+            const uploadPromise = fetch(
+                `https://api.cloudinary.com/v1_1/dmghtw364/image/upload`,
+                {
+                    method: "POST",
+                    body: formData,
+                }
+            ).then(res => res.json());
+
+            // Tạo user (không phụ thuộc ảnh)
+            const userPromise = createUserWithEmailAndPassword(auth, email, password);
+
+            // Đợi cả hai xong
+            const [data, userCredential] = await Promise.all([uploadPromise, userPromise]);
+
+            const url = data.secure_url;
+
+            // Update profile
+            await updateProfile(userCredential.user, {
                 displayName: name,
-            })
-            toast.success("Tạo tài khoản thành công", { id: id })
+                photoURL: url,
+            });
+
+            // Lưu vào Firestore (không cần đợi updateProfile xong nếu không quan trọng)
+            setDoc(doc(fireDB, "users", userCredential.user.uid), {
+                uid: userCredential.user.uid,
+                email: userCredential.user.email,
+                name: name,
+                avatar: url,
+                status: "offline",
+                createdAt: serverTimestamp(),
+            });
+
+            toast.success("Tạo tài khoản thành công", { id: id });
+            navigate("/");
+
+
             // localStorage.setItem('admin', JSON.stringify(result));
             navigate('/');
         } catch (error) {
             toast.error("Lỗi!!", { id: id })
+            console.log(error)
         }
     };
 
@@ -101,6 +139,14 @@ export default function SignUp() {
                                     placeholder="Email"
                                 />
                             </div>
+                            <p className="leading-none px-2 inline-block text-sm text-gray-600 tracking-wide font-medium bg-white transform translate-y-1/2">Ảnh đại diện</p>
+                            <div className="flex flex-row items-center space-x-4 mt-4">
+                                <input
+                                    onChange={(e) => setAvatar(e.target.files[0])}
+                                    className="w-full px-8 py-4 rounded-lg font-medium bg-gray-100 border border-gray-200 placeholder-gray-500 text-sm focus:outline-none focus:border-gray-400 focus:bg-white"
+                                    type="file"
+                                />
+                            </div>
                             <p className="leading-none px-2 inline-block text-sm text-gray-600 tracking-wide font-medium bg-white transform translate-y-1/2">Mật khẩu mới</p>
                             <div className="flex flex-row items-center space-x-4 mt-4">
                                 <input
@@ -111,6 +157,7 @@ export default function SignUp() {
                                     placeholder="Mật khẩu"
                                 />
                             </div>
+
 
                             <div className="my-12 border-b text-center">
 
