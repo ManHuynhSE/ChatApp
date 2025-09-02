@@ -1,25 +1,25 @@
-import { addDoc, collection, doc, getDoc, onSnapshot, query, QuerySnapshot, serverTimestamp, where } from "firebase/firestore";
+import { addDoc, collection, doc, getDoc, onSnapshot, orderBy, query, QuerySnapshot, serverTimestamp, where } from "firebase/firestore";
 import React, { useState, useEffect } from "react";
 import { auth, fireDB } from "../../../firebase/FirebaseConfig";
 import { avatar } from "@material-tailwind/react";
 import toast from "react-hot-toast";
 
 
-const users = [
-    {
-        id: 1,
-        name: "Luy Robin",
-        avatar: "/avatar1.png",
-        online: false,
-    },
-    {
-        id: 2,
-        name: "Mân",
-        avatar: "/avatar2.png",
-        online: true,
-    },
-    // Thêm user khác nếu cần
-];
+// const users = [
+//     {
+//         id: 1,
+//         name: "Luy Robin",
+//         avatar: "/avatar1.png",
+//         online: false,
+//     },
+//     {
+//         id: 2,
+//         name: "Mân",
+//         avatar: "/avatar2.png",
+//         online: true,
+//     },
+//     // Thêm user khác nếu cần
+// ];
 // Dummy data for chats and messages
 // const chats = [
 //     {
@@ -210,7 +210,7 @@ const users = [
 // };
 
 export default function ChatPage() {
-    const [selectedChat, setSelectedChat] = useState(null);
+    const [selectedChat, setSelectedChat] = useState('');
     const [isMobile, setIsMobile] = useState(window.innerWidth < 640);
     const [chats, setChats] = useState([]);
     const [messages, setMessages] = useState([])
@@ -219,7 +219,9 @@ export default function ChatPage() {
     const [user, setUsers] = useState([]);
     const [nameChat, setNameChat] = useState('');
     const [avtSelected, setAvtSelected] = useState("");
+    const [text, setText] = useState('')
     const currentUser = auth.currentUser;
+    const id = "single-toast";
     useEffect(() => {
         const handleResize = () => setIsMobile(window.innerWidth < 640);
         window.addEventListener("resize", handleResize);
@@ -242,7 +244,7 @@ export default function ChatPage() {
     };
 
     const handleCreateChat = async () => {
-        const id = "single-toast";
+
         const currentUid = auth.currentUser?.uid;
         const members = currentUid
             ? Array.from(new Set([currentUid, ...selected]))
@@ -347,7 +349,8 @@ export default function ChatPage() {
         console.log(chat.id)
         try {
             const q = query(
-                collection(fireDB, "chats", chat.id, "messages")
+                collection(fireDB, "chats", chat.id, "messages"),
+                orderBy("createdAt", "asc")
             );
             const data = onSnapshot(q, (QuerySnapshot) => {
                 let messageArray = [];
@@ -363,12 +366,32 @@ export default function ChatPage() {
         }
     }
 
+    const sendChat = async (chat) => {
+        if (!text) {
+            toast.error("Nhập tin nhắn trước khi gửi", { id: id })
+        }
+        const chatsRef = collection(fireDB, "chats/" + chat.id + "/messages");
+        try {
+            await addDoc(
+                chatsRef, {
+                sender: currentUser.uid,
+                text: text,
+                createdAt: serverTimestamp()
+            }
+            )
+            setText('')
+        }
+        catch (error) {
+            console.log(error)
+        }
+    }
+
 
 
     useEffect(() => {
         getAllChat();
         getAllUsers();
-        console.log(avtSelected)
+
         // const unsub = onSnapshot(collection(fireDB, "chats"), (snapshot) => {
         //     setChats(snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data })));
         // });
@@ -496,18 +519,11 @@ export default function ChatPage() {
                             {messages.map((msg) => (
                                 <div
                                     key={msg.id}
-                                    className={`flex ${msg.self ? "justify-end" : "justify-start"} items-start mb-2`}
+                                    className={`flex ${msg.sender === currentUser.uid ? "justify-end" : "justify-start"} items-start mb-2`}
                                 >
-                                    {!msg.self && (
-                                        <img
-                                            src={msg.avatar}
-                                            alt={msg.sender}
-                                            className="h-8 w-8 sm:h-8 sm:w-8 rounded-full object-cover mr-2 sm:mr-3"
-                                        />
-                                    )}
                                     <div>
                                         <div
-                                            className={`bg-gray-100 rounded-xl p-3 mb-1 text-gray-800 ${msg.self ? "bg-blue-50 text-gray-900" : "bg-gray-100 text-gray-800"
+                                            className={`bg-gray-100 rounded-xl p-3 mb-1 text-gray-800 ${msg.sender === currentUser.uid ? "bg-blue-50 text-gray-900" : "bg-gray-100 text-gray-800"
                                                 } max-w-xs sm:max-w-lg`}
                                         >
                                             {msg.text && <div>{msg.text}</div>}
@@ -537,8 +553,8 @@ export default function ChatPage() {
               sticky bottom-0 left-0 w-full">
                             <button className="bg-blue-100 p-2 rounded-full text-blue-500"><svg width="20" height="20"><circle cx="10" cy="10" r="9" fill="#4f8bff" /></svg></button>
                             <button className="bg-blue-100 p-2 rounded-full text-blue-500"><svg width="20" height="20"><circle cx="10" cy="10" r="9" fill="#4f8bff" /></svg></button>
-                            <input className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm" placeholder="Type a message here" />
-                            <button className="bg-blue-500 p-2 rounded-full text-white"><svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2"><path d="M2 12l16-6-7 7-1 4z" /></svg></button>
+                            <input onChange={(e) => setText(e.target.value)} className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm" placeholder="Type a message here" />
+                            <button onClick={() => sendChat(selectedChat)} className="bg-blue-500 p-2 rounded-full text-white"><svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2"><path d="M2 12l16-6-7 7-1 4z" /></svg></button>
                         </div>
                     </main>
                 )}
