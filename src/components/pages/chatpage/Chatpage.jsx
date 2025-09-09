@@ -376,6 +376,7 @@ export default function ChatPage() {
                 chatsRef, {
                 sender: currentUser.uid,
                 text: text,
+                avatar: currentUser.photoURL,
                 createdAt: serverTimestamp()
             }
             )
@@ -521,9 +522,17 @@ export default function ChatPage() {
                                     key={msg.id}
                                     className={`flex ${msg.sender === currentUser.uid ? "justify-end" : "justify-start"} items-start mb-2`}
                                 >
+                                    {msg.sender !== currentUser.uid && (
+                                        <img
+                                            src={msg.avatar}
+                                            alt={msg.sender || 'User'}
+                                            className="w-6 h-6 rounded-full mr-2 object-cover"
+                                        />
+                                    )}
                                     <div>
+
                                         <div
-                                            className={`bg-gray-100 rounded-xl p-3 mb-1 text-gray-800 ${msg.sender === currentUser.uid ? "bg-blue-50 text-gray-900" : "bg-gray-100 text-gray-800"
+                                            className={`bg-blue-50 rounded-xl p-3 mb-1 text-gray-800 ${msg.sender === currentUser.uid ? "bg-blue-500 text-gray-900" : "bg-gray-50 text-gray-800"
                                                 } max-w-xs sm:max-w-lg`}
                                         >
                                             {msg.text && <div>{msg.text}</div>}
@@ -544,18 +553,37 @@ export default function ChatPage() {
                                         </div>
                                         <div className="text-xs text-gray-400 ml-2">{msg.time}</div>
                                     </div>
+                                    {msg.sender === currentUser.uid && (
+                                        <img
+                                            src={currentUser.photoURL}
+                                            alt={currentUser?.displayName || 'You'}
+                                            className="w-8 h-8 rounded-full ml-2 object-cover"
+                                        />
+                                    )}
                                 </div>
                             ))}
                         </div>
                         {/* Chat Input Bar: sticky to bottom on mobile, static on desktop */}
-                        <div className="bg-white px-4 py-3 flex items-center gap-2 rounded-t-xl shadow-md
+
+                        <form
+                            onSubmit={(e) => {
+                                e.preventDefault();
+                                if (text.trim()) {
+                                    sendChat(selectedChat);
+                                    setText('')
+                                }
+
+                            }}
+                        >
+                            <div className="bg-white px-4 py-3 flex items-center gap-2 rounded-t-xl shadow-md
               sm:static sm:rounded-none sm:shadow-none
               sticky bottom-0 left-0 w-full">
-                            <button className="bg-blue-100 p-2 rounded-full text-blue-500"><svg width="20" height="20"><circle cx="10" cy="10" r="9" fill="#4f8bff" /></svg></button>
-                            <button className="bg-blue-100 p-2 rounded-full text-blue-500"><svg width="20" height="20"><circle cx="10" cy="10" r="9" fill="#4f8bff" /></svg></button>
-                            <input onChange={(e) => setText(e.target.value)} className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm" placeholder="Type a message here" />
-                            <button onClick={() => sendChat(selectedChat)} className="bg-blue-500 p-2 rounded-full text-white"><svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2"><path d="M2 12l16-6-7 7-1 4z" /></svg></button>
-                        </div>
+                                <button className="bg-blue-100 p-2 rounded-full text-blue-500"><svg width="20" height="20"><circle cx="10" cy="10" r="9" fill="#4f8bff" /></svg></button>
+                                <button className="bg-blue-100 p-2 rounded-full text-blue-500"><svg width="20" height="20"><circle cx="10" cy="10" r="9" fill="#4f8bff" /></svg></button>
+                                <input value={text} onChange={(e) => setText(e.target.value)} className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm" placeholder="Type a message here" />
+                                <button onClick={() => sendChat(selectedChat)} className="bg-blue-500 p-2 rounded-full text-white"><svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2"><path d="M2 12l16-6-7 7-1 4z" /></svg></button>
+                            </div>
+                        </form>
                     </main>
                 )}
 
